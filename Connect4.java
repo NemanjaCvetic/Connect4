@@ -58,6 +58,10 @@ class Connect4JFrame extends JFrame implements ActionListener {
         private int redPlayerType = HUMAN;
         private int yellowPlayerType = HUMAN;
 
+        private static final int MINIMAX = 2;
+        private MenuItem minimaxRedMI, minimaxYellowMI;
+        private Label lblLastMoveTime;
+
         private Random random = new Random(); // Random agent
 
         public Connect4JFrame() {
@@ -95,6 +99,12 @@ class Connect4JFrame extends JFrame implements ActionListener {
                 randomYellowMI.addActionListener(this);
                 playersMenu.add(randomYellowMI);
                 mbar.add(playersMenu);
+                minimaxRedMI = new MenuItem("Minimax Red");
+                minimaxRedMI.addActionListener(this);
+                playersMenu.add(minimaxRedMI);
+                minimaxYellowMI = new MenuItem("Minimax Yellow");
+                minimaxYellowMI.addActionListener(this);
+                playersMenu.add(minimaxYellowMI);
 
                 setMenuBar(mbar);
 
@@ -153,6 +163,9 @@ class Connect4JFrame extends JFrame implements ActionListener {
                 movePanel.add(lblTotalMoves);
                 add(movePanel, BorderLayout.SOUTH);
 
+                lblLastMoveTime = new Label("Last move time: 0ms");
+                movePanel.add(lblLastMoveTime);
+
                 // Initialize the game loop timer
                 gameLoopTimer = new Timer(1000, new ActionListener() {
                         @Override
@@ -175,19 +188,28 @@ class Connect4JFrame extends JFrame implements ActionListener {
                 makeMove();
         }
 
-        private void stopGameLoop() {
-                isGameRunning = false;
-                gameLoopTimer.stop();
-        }
-
         private void makeMove() {
 
                 if (!end && isGameRunning) {
-                        if (currentTurn == RED && redPlayerType == RANDOM) {
-                                putRandomDisk();
-                        } else if (currentTurn == YELLOW && yellowPlayerType == RANDOM) {
-                                putRandomDisk();
+                        long startTime = System.currentTimeMillis();
+                        if (currentTurn == RED) {
+                                if (redPlayerType == RANDOM) {
+                                        putRandomDisk();
+                                } else if (redPlayerType == MINIMAX) {
+                                        int col = MinimaxConnect4Player.getBestMove(theArray, RED);
+                                        putDisk(col + 1);
+                                }
+                        } else if (currentTurn == YELLOW) {
+                                if (yellowPlayerType == RANDOM) {
+                                        putRandomDisk();
+                                } else if (yellowPlayerType == MINIMAX) {
+                                        int col = MinimaxConnect4Player.getBestMove(theArray, YELLOW);
+                                        putDisk(col + 1);
+                                }
                         }
+                        long endTime = System.currentTimeMillis();
+                        long duration = endTime - startTime;
+                        SwingUtilities.invokeLater(() -> lblLastMoveTime.setText("Last move time: " + duration + "ms"));
                 }
         }
 
@@ -375,7 +397,204 @@ class Connect4JFrame extends JFrame implements ActionListener {
                         yellowPlayerType = HUMAN;
                 } else if (e.getSource() == randomYellowMI) {
                         yellowPlayerType = RANDOM;
+                } else if (e.getSource() == minimaxRedMI) {
+                        redPlayerType = MINIMAX;
+                } else if (e.getSource() == minimaxYellowMI) {
+                        yellowPlayerType = MINIMAX;
                 }
         } // end ActionPerformed
 
 } // class
+
+class MinimaxConnect4Player {
+        private static final int MAX_DEPTH = 6; // Increased depth for better lookahead
+        private static final int WIN_SCORE = 1000000;
+        private static final int LOSE_SCORE = -1000000;
+    
+        public static int getBestMove(int[][] board, int player) {
+            long startTime = System.currentTimeMillis();
+            int bestMove = -1;
+            int bestScore = (player == Connect4JFrame.RED) ? Integer.MIN_VALUE : Integer.MAX_VALUE;
+    
+            // Check for immediate winning move
+            for (int col = 0; col < Connect4JFrame.MAXCOL; col++) {
+                if (isValidMove(board, col)) {
+                    int[][] newBoard = makeMove(board, col, player);
+                    if (isWinningMove(newBoard, player)) {
+                        return col;
+                    }
+                }
+            }
+    
+            // Check for immediate blocking move
+            int opponent = (player == Connect4JFrame.RED) ? Connect4JFrame.YELLOW : Connect4JFrame.RED;
+            for (int col = 0; col < Connect4JFrame.MAXCOL; col++) {
+                if (isValidMove(board, col)) {
+                    int[][] newBoard = makeMove(board, col, opponent);
+                    if (isWinningMove(newBoard, opponent)) {
+                        return col;
+                    }
+                }
+            }
+    
+            for (int col = 0; col < Connect4JFrame.MAXCOL; col++) {
+                if (isValidMove(board, col)) {
+                    int[][] newBoard = makeMove(board, col, player);
+                    int score = minimax(newBoard, MAX_DEPTH, Integer.MIN_VALUE, Integer.MAX_VALUE, opponent);
+    
+                    if (player == Connect4JFrame.RED) {
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestMove = col;
+                        }
+                    } else {
+                        if (score < bestScore) {
+                            bestScore = score;
+                            bestMove = col;
+                        }
+                    }
+                }
+            }
+    
+            long endTime = System.currentTimeMillis();
+            long duration = endTime - startTime;
+            System.out.println("Minimax move time: " + duration + "ms");
+    
+            return bestMove;
+        }
+    
+        private static int minimax(int[][] board, int depth, int alpha, int beta, int player) {
+            if (depth == 0 || isGameOver(board)) {
+                return evaluateBoard(board, player);
+            }
+    
+            int opponent = (player == Connect4JFrame.RED) ? Connect4JFrame.YELLOW : Connect4JFrame.RED;
+    
+            if (player == Connect4JFrame.RED) {
+                int maxScore = Integer.MIN_VALUE;
+                for (int col = 0; col < Connect4JFrame.MAXCOL; col++) {
+                    if (isValidMove(board, col)) {
+                        int[][] newBoard = makeMove(board, col, player);
+                        int score = minimax(newBoard, depth - 1, alpha, beta, opponent);
+                        maxScore = Math.max(maxScore, score);
+                        alpha = Math.max(alpha, score);
+                        if (beta <= alpha)
+                            break;
+                    }
+                }
+                return maxScore;
+            } else {
+                int minScore = Integer.MAX_VALUE;
+                for (int col = 0; col < Connect4JFrame.MAXCOL; col++) {
+                    if (isValidMove(board, col)) {
+                        int[][] newBoard = makeMove(board, col, player);
+                        int score = minimax(newBoard, depth - 1, alpha, beta, opponent);
+                        minScore = Math.min(minScore, score);
+                        beta = Math.min(beta, score);
+                        if (beta <= alpha)
+                            break;
+                    }
+                }
+                return minScore;
+            }
+        }
+    
+        private static int evaluateBoard(int[][] board, int player) {
+            int score = 0;
+            int opponent = (player == Connect4JFrame.RED) ? Connect4JFrame.YELLOW : Connect4JFrame.RED;
+    
+            // Check for wins
+            if (hasPlayerWon(board, player)) return WIN_SCORE;
+            if (hasPlayerWon(board, opponent)) return LOSE_SCORE;
+    
+            score += evaluateLines(board, player, 3) * 100;
+            score += evaluateLines(board, player, 2) * 10;
+            score -= evaluateLines(board, opponent, 3) * 80;
+            score -= evaluateLines(board, opponent, 2) * 50;
+    
+            return score;
+        }
+    
+        private static int evaluateLines(int[][] board, int player, int count) {
+            int lines = 0;
+            lines += countLines(board, player, count, 1, 0); // horizontal
+            lines += countLines(board, player, count, 0, 1); // vertical
+            lines += countLines(board, player, count, 1, 1); // diagonal /
+            lines += countLines(board, player, count, 1, -1); // diagonal \
+            return lines;
+        }
+    
+        private static int countLines(int[][] board, int player, int count, int dRow, int dCol) {
+            int lines = 0;
+            for (int row = 0; row < Connect4JFrame.MAXROW; row++) {
+                for (int col = 0; col < Connect4JFrame.MAXCOL; col++) {
+                    if (checkLine(board, row, col, player, count, dRow, dCol)) {
+                        lines++;
+                    }
+                }
+            }
+            return lines;
+        }
+    
+        private static boolean checkLine(int[][] board, int startRow, int startCol, int player, int count, int dRow, int dCol) {
+            int playerCount = 0;
+            int emptyCount = 0;
+            for (int i = 0; i < 4; i++) {
+                int row = startRow + i * dRow;
+                int col = startCol + i * dCol;
+                if (row < 0 || row >= Connect4JFrame.MAXROW || col < 0 || col >= Connect4JFrame.MAXCOL) {
+                    return false;
+                }
+                if (board[row][col] == player) {
+                    playerCount++;
+                } else if (board[row][col] == Connect4JFrame.BLANK) {
+                    emptyCount++;
+                } else {
+                    return false;
+                }
+            }
+            return playerCount == count && playerCount + emptyCount == 4;
+        }
+    
+        private static boolean isWinningMove(int[][] board, int player) {
+            return hasPlayerWon(board, player);
+        }
+    
+        private static boolean hasPlayerWon(int[][] board, int player) {
+            return evaluateLines(board, player, 4) > 0;
+        }
+
+        private static boolean isValidMove(int[][] board, int col) {
+                return board[0][col] == Connect4JFrame.BLANK;
+        }
+
+        private static int[][] makeMove(int[][] board, int col, int player) {
+                int[][] newBoard = new int[Connect4JFrame.MAXROW][Connect4JFrame.MAXCOL];
+                for (int i = 0; i < Connect4JFrame.MAXROW; i++) {
+                        System.arraycopy(board[i], 0, newBoard[i], 0, Connect4JFrame.MAXCOL);
+                }
+
+                for (int row = Connect4JFrame.MAXROW - 1; row >= 0; row--) {
+                        if (newBoard[row][col] == Connect4JFrame.BLANK) {
+                                newBoard[row][col] = player;
+                                break;
+                        }
+                }
+                return newBoard;
+        }
+
+        private static boolean isGameOver(int[][] board) {
+                return isBoardFull(board) || hasPlayerWon(board, Connect4JFrame.RED)
+                                || hasPlayerWon(board, Connect4JFrame.YELLOW);
+        }
+
+        private static boolean isBoardFull(int[][] board) {
+                for (int col = 0; col < Connect4JFrame.MAXCOL; col++) {
+                        if (board[0][col] == Connect4JFrame.BLANK)
+                                return false;
+                }
+                return true;
+        }
+
+       
+}
