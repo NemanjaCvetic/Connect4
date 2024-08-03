@@ -206,7 +206,10 @@ class Connect4JFrame extends JFrame implements ActionListener {
                                         putRandomDisk();
                                 } else if (redPlayerType == MINIMAX) {
                                         int col = MinimaxConnect4Player.getBestMove(theArray, RED);
-                                        putDisk(col + 1);
+                                        if (redMoves == 0) {
+                                                putRandomDisk();
+                                        } else
+                                                putDisk(col + 1);
                                 } else if (redPlayerType == SIMPLE_MINIMAX) {
                                         int col = SimpleMinimax.getBestMove(theArray, RED);
                                         putDisk(col + 1);
@@ -440,52 +443,53 @@ class MinimaxConnect4Player {
                 long startTime = System.currentTimeMillis();
                 int bestMove = -1;
                 int bestScore = (player == Connect4JFrame.RED) ? Integer.MIN_VALUE : Integer.MAX_VALUE;
-
+            
+                int opponent = (player == Connect4JFrame.RED) ? Connect4JFrame.YELLOW : Connect4JFrame.RED;
+            
                 // Check for immediate winning move
                 for (int col = 0; col < Connect4JFrame.MAXCOL; col++) {
-                        if (isValidMove(board, col)) {
-                                int[][] newBoard = makeMove(board, col, player);
-                                if (isWinningMove(newBoard, player)) {
-                                        return col;
-                                }
+                    if (isValidMove(board, col)) {
+                        int[][] newBoard = makeMove(board, col, player);
+                        if (isWinningMove(newBoard, player)) {
+                            return col;
                         }
+                    }
                 }
-
+            
                 // Check for immediate blocking move
-                int opponent = (player == Connect4JFrame.RED) ? Connect4JFrame.YELLOW : Connect4JFrame.RED;
                 for (int col = 0; col < Connect4JFrame.MAXCOL; col++) {
-                        if (isValidMove(board, col)) {
-                                int[][] newBoard = makeMove(board, col, opponent);
-                                if (isWinningMove(newBoard, opponent)) {
-                                        return col;
-                                }
+                    if (isValidMove(board, col)) {
+                        int[][] newBoard = makeMove(board, col, opponent);
+                        if (isWinningMove(newBoard, opponent)) {
+                            return col;
                         }
+                    }
                 }
-
+            
+                // Regular minimax search
                 for (int col = 0; col < Connect4JFrame.MAXCOL; col++) {
-                        if (isValidMove(board, col)) {
-                                int[][] newBoard = makeMove(board, col, player);
-                                int score = minimax(newBoard, MAX_DEPTH, Integer.MIN_VALUE, Integer.MAX_VALUE,
-                                                opponent);
-
-                                if (player == Connect4JFrame.RED) {
-                                        if (score > bestScore) {
-                                                bestScore = score;
-                                                bestMove = col;
-                                        }
-                                } else {
-                                        if (score < bestScore) {
-                                                bestScore = score;
-                                                bestMove = col;
-                                        }
-                                }
+                    if (isValidMove(board, col)) {
+                        int[][] newBoard = makeMove(board, col, player);
+                        int score = minimax(newBoard, MAX_DEPTH, Integer.MIN_VALUE, Integer.MAX_VALUE, opponent);
+            
+                        if (player == Connect4JFrame.RED) {
+                            if (score > bestScore) {
+                                bestScore = score;
+                                bestMove = col;
+                            }
+                        } else {
+                            if (score < bestScore) {
+                                bestScore = score;
+                                bestMove = col;
+                            }
                         }
+                    }
                 }
-
+            
                 long endTime = System.currentTimeMillis();
                 long duration = endTime - startTime;
                 System.out.println("Minimax move time: " + duration + "ms");
-
+            
                 return bestMove;
         }
 
@@ -535,13 +539,76 @@ class MinimaxConnect4Player {
                 if (hasPlayerWon(board, opponent))
                         return LOSE_SCORE;
 
-                score += evaluateLines(board, player, 3) * 100;
-                score += evaluateLines(board, player, 2) * 10;
-                score -= evaluateLines(board, opponent, 3) * 80;
-                score -= evaluateLines(board, opponent, 2) * 50;
+                // Evaluate horizontal lines
+                score += evaluateHorizontal(board, player);
+                score -= evaluateHorizontal(board, opponent);
+
+                // Evaluate vertical lines
+                score += evaluateVertical(board, player);
+                score -= evaluateVertical(board, opponent);
+
+                // Evaluate diagonal lines
+                score += evaluateDiagonal(board, player);
+                score -= evaluateDiagonal(board, opponent);
 
                 return score;
         }
+
+        private static int evaluateHorizontal(int[][] board, int player) {
+                int score = 0;
+                for (int row = 0; row < Connect4JFrame.MAXROW; row++) {
+                    for (int col = 0; col < Connect4JFrame.MAXCOL - 3; col++) {
+                        int[] line = {board[row][col], board[row][col+1], board[row][col+2], board[row][col+3]};
+                        score += evaluateLine(line, player);
+                    }
+                }
+                return score;
+            }
+            
+            private static int evaluateVertical(int[][] board, int player) {
+                int score = 0;
+                for (int col = 0; col < Connect4JFrame.MAXCOL; col++) {
+                    for (int row = 0; row < Connect4JFrame.MAXROW - 3; row++) {
+                        int[] line = {board[row][col], board[row+1][col], board[row+2][col], board[row+3][col]};
+                        score += evaluateLine(line, player);
+                    }
+                }
+                return score;
+            }
+            
+            private static int evaluateDiagonal(int[][] board, int player) {
+                int score = 0;
+                // Diagonal (positive slope)
+                for (int row = 0; row < Connect4JFrame.MAXROW - 3; row++) {
+                    for (int col = 0; col < Connect4JFrame.MAXCOL - 3; col++) {
+                        int[] line = {board[row][col], board[row+1][col+1], board[row+2][col+2], board[row+3][col+3]};
+                        score += evaluateLine(line, player);
+                    }
+                }
+                // Diagonal (negative slope)
+                for (int row = 3; row < Connect4JFrame.MAXROW; row++) {
+                    for (int col = 0; col < Connect4JFrame.MAXCOL - 3; col++) {
+                        int[] line = {board[row][col], board[row-1][col+1], board[row-2][col+2], board[row-3][col+3]};
+                        score += evaluateLine(line, player);
+                    }
+                }
+                return score;
+            }
+
+            private static int evaluateLine(int[] line, int player) {
+                int playerCount = 0;
+                int emptyCount = 0;
+            
+                for (int cell : line) {
+                    if (cell == player) playerCount++;
+                    else if (cell == Connect4JFrame.BLANK) emptyCount++;
+                }
+            
+                if (playerCount == 4) return 100000;
+                else if (playerCount == 3 && emptyCount == 1) return 1000;
+                else if (playerCount == 2 && emptyCount == 2) return 10;
+                else return 0;
+            }
 
         private static int evaluateLines(int[][] board, int player, int count) {
                 int lines = 0;
@@ -628,7 +695,7 @@ class MinimaxConnect4Player {
 }
 
 class SimpleMinimax {
-        private static final int MAX_DEPTH = 5; // You might want to reduce this as it will be slower without pruning
+        private static final int MAX_DEPTH = 6; // might want to reduce this as it will be slower without pruning
         private static final int WIN_SCORE = 1000000;
         private static final int LOSE_SCORE = -1000000;
 
